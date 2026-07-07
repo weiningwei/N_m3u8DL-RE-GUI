@@ -114,7 +114,10 @@ pub fn view(app: &App) -> Element<'_, Message> {
     column![
         tab_bar(app),
         rule::horizontal(1.0),
-        scrollable(content).width(Length::Fill).height(Length::Fill),
+        scrollable(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .spacing(4.0),
         bottom_bar(app),
     ]
     .spacing(6)
