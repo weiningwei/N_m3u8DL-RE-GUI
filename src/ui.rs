@@ -143,19 +143,41 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         col = col.push(text(&app.exe_error).color([0.9, 0.3, 0.3]).size(13));
     }
     col = col.push(lab(
-        "下载地址/文件",
-        text_input("URL 或本地 m3u8/mpd 路径", &app.input).on_input(Message::InputChanged),
-    ));
-    col = col.push(lab(
         "保存目录",
         row![
-            text_input("输出目录", &app.save_dir)
+            text_input("默认 exe 同目录 downloads", &app.save_dir)
                 .on_input(Message::SaveDirChanged)
                 .width(Length::Fill),
             button(text("浏览")).on_press(Message::BrowseSaveDir),
         ]
         .spacing(6)
         .width(Length::Fill),
+    ));
+    col = col.push(lab(
+        "临时目录",
+        row![
+            text_input("默认位于 exe 同目录 temp", &app.tmp_dir)
+                .on_input(Message::TmpDirChanged)
+                .width(Length::Fill),
+            button(text("浏览")).on_press(Message::BrowseTmpDir),
+        ]
+        .spacing(6)
+        .width(Length::Fill),
+    ));
+    col = col.push(lab(
+        "日志文件路径",
+        row![
+            text_input("如 C:\\Logs\\log.txt", &app.log_file_path)
+                .on_input(Message::LogFilePathChanged)
+                .width(Length::Fill),
+            button(text("浏览")).on_press(Message::BrowseLogFile),
+        ]
+        .spacing(6)
+        .width(Length::Fill),
+    ));
+    col = col.push(lab(
+        "下载地址/文件",
+        text_input("URL 或本地 m3u8/mpd 路径", &app.input).on_input(Message::InputChanged),
     ));
     col = col.push(lab(
         "保存文件名",
@@ -165,15 +187,6 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         "命名模板",
         text_input("如 <SaveName>_<Resolution>", &app.save_pattern)
             .on_input(Message::SavePatternChanged),
-    ));
-    col = col.push(lab(
-        "临时目录",
-        text_input("留空用默认", &app.tmp_dir).on_input(Message::TmpDirChanged),
-    ));
-    col = col.push(lab(
-        "日志文件路径",
-        text_input("如 C:\\Logs\\log.txt", &app.log_file_path)
-            .on_input(Message::LogFilePathChanged),
     ));
     col = col.push(lab(
         "BaseURL",

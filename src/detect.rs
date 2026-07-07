@@ -1,3 +1,39 @@
+use std::path::PathBuf;
+
+/// 当前 GUI 可执行文件所在目录。
+pub fn exe_dir() -> Option<PathBuf> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+}
+
+/// 日志文件默认路径：可执行文件所在目录下的 `log/n_m3u8dl-re-gui.log`。
+pub fn default_log_path() -> String {
+    let p = match exe_dir() {
+        Some(dir) => dir.join("log").join("n_m3u8dl-re-gui.log"),
+        None => PathBuf::from("log").join("n_m3u8dl-re-gui.log"),
+    };
+    p.to_string_lossy().into_owned()
+}
+
+/// 临时文件目录默认路径：可执行文件所在目录下的 `temp`。
+pub fn default_temp_path() -> String {
+    let p = match exe_dir() {
+        Some(dir) => dir.join("temp"),
+        None => PathBuf::from("temp"),
+    };
+    p.to_string_lossy().into_owned()
+}
+
+/// 保存目录默认路径：可执行文件所在目录下的 `downloads`。
+pub fn default_save_dir() -> String {
+    let p = match exe_dir() {
+        Some(dir) => dir.join("downloads"),
+        None => PathBuf::from("downloads"),
+    };
+    p.to_string_lossy().into_owned()
+}
+
 /// 定位 N_m3u8DL-RE.exe：优先用用户指定的路径，否则尝试与 GUI 同目录、再尝试 PATH。
 pub fn locate_exe(preferred: &str) -> Option<String> {
     let name = if cfg!(windows) { "N_m3u8DL-RE.exe" } else { "N_m3u8DL-RE" };

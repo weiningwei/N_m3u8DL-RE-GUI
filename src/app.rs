@@ -1,10 +1,11 @@
 use crate::args::build_args;
 use crate::config::Settings;
-use crate::detect::locate_exe;
+use crate::detect::{default_log_path, default_save_dir, default_temp_path, locate_exe};
 use crate::runner;
 use crate::ui;
 use iced::widget::text_editor;
 use iced::{Element, Task};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum Tab {
@@ -167,6 +168,10 @@ pub enum Message {
     SavePatternChanged(String),
     TmpDirChanged(String),
     LogFilePathChanged(String),
+    BrowseTmpDir,
+    TmpDirChosen(Option<String>),
+    BrowseLogFile,
+    LogFileChosen(Option<String>),
     BaseUrlChanged(String),
     // 线程/重试/超时
     ThreadCountChanged(String),
@@ -332,11 +337,15 @@ impl App {
         let mut app = App {
             exe_path: settings.exe_path.clone(),
             input: String::new(),
-            save_dir: settings.save_dir.clone(),
+            save_dir: if settings.save_dir.is_empty() {
+                default_save_dir()
+            } else {
+                settings.save_dir.clone()
+            },
             save_name: String::new(),
             save_pattern: String::new(),
-            tmp_dir: String::new(),
-            log_file_path: String::new(),
+            tmp_dir: default_temp_path(),
+            log_file_path: default_log_path(),
             base_url: String::new(),
             thread_count: String::new(),
             retry_count: String::new(),
@@ -484,6 +493,50 @@ impl App {
             Message::SavePatternChanged(s) => self.save_pattern = s,
             Message::TmpDirChanged(s) => self.tmp_dir = s,
             Message::LogFilePathChanged(s) => self.log_file_path = s,
+            Message::BrowseTmpDir => {
+                return Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .pick_folder()
+                            .await
+                            .map(|h| h.path().to_string_lossy().into_owned())
+                    },
+                    Message::TmpDirChosen,
+                )
+            }
+            Message::TmpDirChosen(p) => {
+                if let Some(p) = p {
+                    self.tmp_dir = p;
+                }
+            }
+            Message::BrowseLogFile => {
+                return Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .pick_folder()
+                            .await
+                            .map(|h| h.path().to_string_lossy().into_owned())
+                    },
+                    Message::LogFileChosen,
+                )
+            }
+            Message::LogFileChosen(p) => {
+                if let Some(p) = p {
+                    let path = PathBuf::from(&p);
+                    // 若选择的是目录，则默认拼接一个日志文件名；
+                    // 若选择的是文件，则直接使用该文件。
+                    let resolved = if path.is_dir() {
+                        let name = PathBuf::from(default_log_path())
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| "n_m3u8dl-re-gui.log".to_string());
+                        path.join(name)
+                    } else {
+                        path
+                    };
+                    self.log_file_path = resolved.to_string_lossy().into_owned();
+                }
+            }
             Message::BaseUrlChanged(s) => self.base_url = s,
             Message::ThreadCountChanged(s) => self.thread_count = s,
             Message::RetryCountChanged(s) => self.retry_count = s,

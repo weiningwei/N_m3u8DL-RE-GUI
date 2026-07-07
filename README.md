@@ -93,12 +93,16 @@ cargo run
 ## 配置存储
 
 GUI 会记住少量用户偏好（可执行文件路径、保存目录、代理地址、请求头、外部控制台开关），
-保存为 JSON 配置文件：
+保存为 JSON 配置文件，位于**可执行文件所在目录**下的 `config/config.json`
+（即与 GUI 的 `.exe` 同级的 `config` 子目录中）：
 
-- Windows：`%APPDATA%\n_m3u8dl-re-gui\config\config.json`
-- Linux / macOS：位于对应平台的应用配置目录下
+- Windows：`N_m3u8DL-RE-GUI.exe` 所在目录 `\config\config.json`
+- Linux / macOS：可执行文件所在目录 `/config/config.json`
 
-删除该文件即可恢复默认设置。
+下载日志文件默认写入**可执行文件所在目录**下的 `log/n_m3u8dl-re-gui.log`
+（可在「基本」页的“日志文件路径”中修改）。
+
+删除配置（及日志）文件即恢复默认设置。
 
 ---
 
