@@ -1,0 +1,27 @@
+src/ui.rs
+  s_f98ea7321cb83d::t_e3209d457c1783 47,98,136-137,154-155,211-212
+  s_f98ea7321cb83d::t_1fd0629d1e31c5 97,194-195
+  s_f98ea7321cb83d::t_19fedb39360183 44-46
+  s_f98ea7321cb83d::t_0b2ad18dc65273 48-50,94-96
+  s_f98ea7321cb83d::t_7487dd8a683ec6 99-101,133-135
+  s_f98ea7321cb83d::t_4377f02530741f 138-140,151-153
+  s_f98ea7321cb83d::t_77334b274b70b3 156-158,191-193
+  s_f98ea7321cb83d::t_a8eea95407961a 196-198,208-210
+  s_f98ea7321cb83d::t_a5f359274ea519 213-215
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3028bbaae92c84b330f5c199e5eb28101f60ab7a",
+  "prompts": {},
+  "sessions": {
+    "s_f98ea7321cb83d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c2a65dc7ffeowSqsprHH7K2Tb",
+        "model": "unknown"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
