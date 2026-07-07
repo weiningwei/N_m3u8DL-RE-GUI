@@ -1,0 +1,20 @@
+src/main.rs
+  s_f98ea7321cb83d::t_c98c4b822c293b 9,21,50-64,111
+  s_f98ea7321cb83d::t_d318e0290f89a2 65-67,108-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5be717d0058ad1e15e52ce3990c19afce240a93b",
+  "prompts": {},
+  "sessions": {
+    "s_f98ea7321cb83d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c2a65dc7ffeowSqsprHH7K2Tb",
+        "model": "unknown"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
