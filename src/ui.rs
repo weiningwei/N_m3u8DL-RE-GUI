@@ -255,7 +255,9 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
     ));
     col = col.push(lab(
         "下载地址/文件",
-        text_input("URL 或本地 m3u8/mpd 路径", &app.input).on_input(Message::InputChanged),
+        text_input("URL 或本地 m3u8/mpd 路径", &app.input)
+            .on_input(Message::InputChanged)
+            .on_submit(Message::Start),
     ));
     if !app.input_error.is_empty() {
         col = col.push(text(&app.input_error).color([0.9, 0.3, 0.3]).size(13));
