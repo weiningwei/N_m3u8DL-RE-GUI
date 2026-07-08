@@ -104,7 +104,9 @@ fn send_chunk(buf: &mut Vec<u8>, tx: &mpsc::Sender<LogEvent>, progress: bool) {
     if buf.is_empty() {
         return;
     }
-    let raw = String::from_utf8_lossy(buf).to_string();
+    // N_m3u8DL-RE 在管道输出时使用系统 ANSI 代码页（中文 Windows 为 GBK），
+    // 直接按 UTF-8 解码会产生乱码，因此优先 UTF-8、失败再回退系统代码页。
+    let raw = decode_bytes(buf);
     buf.clear();
     let line = strip_ansi(&raw);
     let line = line.trim_end_matches(['\r', '\n']).to_string();
@@ -118,22 +120,44 @@ fn send_chunk(buf: &mut Vec<u8>, tx: &mpsc::Sender<LogEvent>, progress: bool) {
     });
 }
 
-/// 移除 ANSI 转义序列（捕获模式下 RE 可能输出彩色控制符）
+/// 解码一行原始字节：
+/// 1. 优先按 UTF-8 解码（无 BOM、且不容忍替换字符）；
+/// 2. 失败则按 GBK（中文 Windows 系统 ANSI 代码页 CP936）解码。
+fn decode_bytes(buf: &[u8]) -> String {
+    if let Some(s) = encoding_rs::UTF_8.decode_without_bom_handling_and_without_replacement(buf) {
+        return s.into_owned();
+    }
+    encoding_rs::GBK
+        .decode_without_bom_handling(buf)
+        .0
+        .into_owned()
+}
+
+/// 移除 ANSI 转义序列（捕获模式下 RE 可能输出彩色控制符）。
+///
+/// 必须在按 UTF-8/GBK 解码后的字符串上、以「字符」为单位处理：
+/// 若按字节把每个字节 `as char` 推入，多字节中文（如 UTF-8 的 `下`=E4 B8 8B）
+/// 会被拆成多个 Latin-1 字符而再次乱码。ANSI 序列本身均为 ASCII，
+/// 故跳过 ESC[...字母] 这段、其余字符原样保留即可。
 fn strip_ansi(s: &str) -> String {
-    let b = s.as_bytes();
     let mut out = String::with_capacity(s.len());
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] == 0x1b && i + 1 < b.len() && b[i + 1] == b'[' {
-            let mut j = i + 2;
-            while j < b.len() && !(b[j].is_ascii_uppercase() || b[j].is_ascii_lowercase()) {
-                j += 1;
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1B}' {
+            // CSI 序列：ESC [ ... 终结字母
+            if chars.peek() == Some(&'[') {
+                chars.next(); // 消费 '['
+                while let Some(&n) = chars.peek() {
+                    if n.is_ascii_alphabetic() {
+                        break;
+                    }
+                    chars.next();
+                }
+                chars.next(); // 消费终结字母
             }
-            i = j + 1;
-        } else {
-            out.push(b[i] as char);
-            i += 1;
+            continue;
         }
+        out.push(c);
     }
     out
 }
@@ -153,4 +177,30 @@ pub fn make_subscription(run_id: u64, running: bool) -> iced::Subscription<Messa
             }
         })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn utf8_chinese_passes_through() {
+        // “下载URL” 的 UTF-8 字节
+        let bytes = "下载URL".as_bytes();
+        assert_eq!(decode_bytes(bytes), "下载URL");
+    }
+
+    #[test]
+    fn gbk_chinese_decoded_via_fallback() {
+        // “下载URL” 按 GBK 编码后的字节，应能被回退解码还原
+        let (gbk, _, _) = encoding_rs::GBK.encode("下载URL");
+        assert_eq!(decode_bytes(&gbk), "下载URL");
+    }
+
+    #[test]
+    fn strip_ansi_keeps_chinese_and_drops_escape() {
+        // ANSI 颜色序列夹在中文之间，中文字符必须原样保留
+        let input = "\u{1B}[32m下载\u{1B}[0m完成";
+        assert_eq!(strip_ansi(input), "下载完成");
+    }
 }

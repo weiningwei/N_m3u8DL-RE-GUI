@@ -235,11 +235,14 @@ pub(crate) mod tests {
             external_console: false,
             theme_mode: crate::app::ThemeMode::System,
             tab: Tab::Basic,
-            log: String::new(),
+            log_last_is_progress: false,
+            log_content: text_editor::Content::new(),
             running: false,
             run_gen: 0,
             exe_error: String::new(),
             input_error: String::new(),
+            copied_at: None,
+            log_copied_at: None,
         };
         a.save_name = "test".into();
         a.proxy_mode = ProxyMode::Custom;

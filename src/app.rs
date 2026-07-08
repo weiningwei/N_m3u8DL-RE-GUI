@@ -8,6 +8,7 @@ use iced::{Element, Task};
 use iced::keyboard;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -360,7 +361,6 @@ pub struct App {
     pub external_console: bool,
     pub theme_mode: ThemeMode,
     pub tab: Tab,
-    pub log: String,
     /// 上一次追加的是进度刷新行（\r），用于下次覆盖而非新增
     pub log_last_is_progress: bool,
     /// 日志区可选择的只读文本编辑器内容（与 `log` 同步）
@@ -448,7 +448,6 @@ impl App {
             external_console: settings.external_console,
             theme_mode: settings.theme_mode,
             tab: Tab::Basic,
-            log: String::new(),
             log_last_is_progress: false,
             log_content: text_editor::Content::with_text(""),
             running: false,
@@ -504,8 +503,36 @@ impl App {
         }
     }
 
-    pub fn save_settings(&self) {
-        let s = Settings {
+    /// 将文本增量追加到日志编辑器末尾。
+    ///
+    /// 关键性能点：捕获日志模式下，旧实现每次收到一行都用 `with_text`
+    /// 重建整个文档，复杂度 O(n²)，日志量大时 UI 线程被阻塞，导致日志
+    /// “不会立即全部展示”。这里改为把光标移到末尾后 `Edit::Paste`，
+    /// 每次只处理新增文本，复杂度 O(1)，日志随进程实时滚动。
+    fn append_log(&mut self, text: &str) {
+        use iced::widget::text_editor::{Action, Motion};
+        use iced::widget::text_editor::Edit;
+        self.log_content.perform(Action::Move(Motion::DocumentEnd));
+        self.log_content
+            .perform(Action::Edit(Edit::Paste(Arc::new(text.to_string()))));
+    }
+
+    /// 用新文本覆盖日志末尾的“进度刷新行”（\r 驱动），避免刷屏。
+    ///
+    /// 文档末尾恒有一个由追加的 `\n` 产生的空行，故先 `DocumentEnd` 再
+    /// `Left` 退到最后一个“真实”行，整行选中后 `Backspace` + `Paste` 替换。
+    fn overwrite_last_progress(&mut self, text: &str) {
+        use iced::widget::text_editor::{Action, Motion};
+        use iced::widget::text_editor::Edit;
+        self.log_content.perform(Action::Move(Motion::DocumentEnd));
+        self.log_content.perform(Action::Move(Motion::Left));
+        self.log_content.perform(Action::SelectLine);
+        self.log_content.perform(Action::Edit(Edit::Backspace));
+        self.log_content
+            .perform(Action::Edit(Edit::Paste(Arc::new(text.to_string()))));
+    }
+
+    pub fn save_settings(&self) {        let s = Settings {
             exe_path: self.exe_path.clone(),
             save_dir: self.save_dir.clone(),
             proxy_address: self.proxy_address.clone(),
@@ -772,49 +799,41 @@ impl App {
                             runner::start_run(run_id, exe, input, args, capture);
                             self.running = true;
                             self.tab = Tab::Log;
-                            self.log.clear();
+                            self.log_content = text_editor::Content::new();
                             self.log_last_is_progress = false;
-                            self.log.push_str("开始运行...\n");
-                            self.log_content = text_editor::Content::with_text(&self.log);
+                            self.append_log("开始运行...\n");
                         }
                     }
                 }
             }
             Message::LogEvent(ev) => {
-                let append = match ev {
+                match ev {
                     LogEvent::Line(s) => {
                         self.log_last_is_progress = false;
-                        format!("{s}\n")
+                        self.append_log(&format!("{s}\n"));
                     }
                     LogEvent::Progress(s) => {
-                        // 进度刷新（\r）覆盖上一行，避免日志被刷屏
+                        // 进度刷新（\r）：覆盖上一行而非新增，避免日志被刷屏。
+                        // 仅在“上一条也是进度行”时覆盖，否则正常追加。
+                        let text = format!("{s}\n");
                         if self.log_last_is_progress {
-                            // 删除最后一行（保留之前的换行）
-                            if let Some(pos) = self.log.rfind('\n') {
-                                let prefix = &self.log[..pos];
-                                if let Some(prev) = prefix.rfind('\n') {
-                                    self.log.truncate(prev + 1);
-                                } else {
-                                    self.log.clear();
-                                }
-                            }
+                            self.overwrite_last_progress(&text);
+                        } else {
+                            self.append_log(&text);
                         }
                         self.log_last_is_progress = true;
-                        format!("{s}\n")
                     }
                     LogEvent::Done(Ok(code)) => {
                         self.log_last_is_progress = false;
                         self.running = false;
-                        format!("进程结束，退出码 {code}\n")
+                        self.append_log(&format!("进程结束，退出码 {code}\n"));
                     }
                     LogEvent::Done(Err(e)) => {
                         self.log_last_is_progress = false;
                         self.running = false;
-                        format!("进程异常：{e}\n")
+                        self.append_log(&format!("进程异常：{e}\n"));
                     }
-                };
-                self.log.push_str(&append);
-                self.log_content = text_editor::Content::with_text(&self.log);
+                }
             }
             Message::CopyPreview => {
                 let text = self.command_preview();
@@ -829,7 +848,7 @@ impl App {
                 // 优先复制选中文本；未选中任何内容时复制全部日志
                 let to_copy = match self.log_content.selection() {
                     Some(s) if !s.trim().is_empty() => s,
-                    _ => self.log.clone(),
+                    _ => self.log_content.text(),
                 };
                 std::thread::spawn(move || {
                     if let Ok(mut cb) = arboard::Clipboard::new() {
@@ -864,9 +883,8 @@ impl App {
                 }
             }
             Message::ClearLog => {
-                self.log.clear();
+                self.log_content = text_editor::Content::new();
                 self.log_last_is_progress = false;
-                self.log_content = text_editor::Content::with_text("");
             }
             Message::KeyEvent(event) => {
                 if let keyboard::Event::KeyPressed { key, modifiers, .. } = event {
