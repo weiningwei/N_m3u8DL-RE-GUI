@@ -38,15 +38,21 @@ pub fn start_run(run_id: u64, exe: String, input: String, args: Vec<String>, cap
 
         match cmd.spawn() {
             Ok(mut child) => {
+                let mut readers = Vec::new();
                 if capture {
                     if let Some(out) = child.stdout.take() {
-                        spawn_reader(out, tx.clone());
+                        readers.push(spawn_reader(out, tx.clone()));
                     }
                     if let Some(err) = child.stderr.take() {
-                        spawn_reader(err, tx.clone());
+                        readers.push(spawn_reader(err, tx.clone()));
                     }
                 }
                 let status = child.wait();
+                // 必须等读取线程把输出全部发送完，再发 Done，
+                // 否则订阅关闭后剩余行会丢失。
+                for h in readers {
+                    let _ = h.join();
+                }
                 let done = match status {
                     Ok(s) => Ok(s.code().unwrap_or(0) as u32),
                     Err(e) => Err(e.to_string()),
@@ -61,18 +67,23 @@ pub fn start_run(run_id: u64, exe: String, input: String, args: Vec<String>, cap
     });
 }
 
-fn spawn_reader<R: std::io::Read + Send + 'static>(reader: R, tx: mpsc::Sender<LogEvent>) {
+fn spawn_reader<R: std::io::Read + Send + 'static>(
+    mut reader: R,
+    tx: mpsc::Sender<LogEvent>,
+) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
-        use std::io::{BufRead, BufReader};
-        for line in BufReader::new(reader).lines() {
-            match line {
-                Ok(l) => {
-                    let _ = tx.send(LogEvent::Line(strip_ansi(&l)));
+        let mut data = String::new();
+        // 读到 EOF（进程结束、管道关闭）。用 read_to_string 而非 lines()，
+        // 避免进程退出时最后一行没有换行符而被丢弃。
+        if reader.read_to_string(&mut data).is_ok() {
+            for raw in data.split('\n') {
+                let line = raw.strip_suffix('\r').unwrap_or(raw);
+                if !line.is_empty() {
+                    let _ = tx.send(LogEvent::Line(strip_ansi(line)));
                 }
-                Err(_) => break,
             }
         }
-    });
+    })
 }
 
 /// 移除 ANSI 转义序列（捕获模式下 RE 可能输出彩色控制符）

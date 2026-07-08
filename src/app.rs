@@ -442,8 +442,11 @@ impl App {
 
     /// 实时命令预览（不含 exe 本身）
     pub fn command_preview(&self) -> String {
+        let exe = locate_exe(&self.exe_path).unwrap_or_else(|| self.exe_path.clone());
         let args = build_args(self);
         let mut s = String::new();
+        s.push_str(&quote(&exe));
+        s.push(' ');
         if !self.input.is_empty() {
             s.push_str(&quote(&self.input));
             s.push(' ');
