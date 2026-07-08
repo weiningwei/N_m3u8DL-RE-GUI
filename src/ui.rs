@@ -587,17 +587,29 @@ fn advanced_tab(app: &App) -> Element<'_, Message> {
 }
 
 fn log_tab(app: &App) -> Element<'_, Message> {
+    // 复制日志后的“已复制 ✓”提示（与命令预览区互相独立）
+    let log_copied_label: iced::Element<'_, Message> = if app.log_copied_at.is_some() {
+        text("已复制 ✓").size(13).color([0.18, 0.8, 0.44]).into()
+    } else {
+        text("").size(13).into()
+    };
     column![
         row![
             button(text("清空日志").size(13)).on_press(Message::ClearLog),
             button(text("打开输出文件夹").size(13)).on_press(Message::OpenOutputFolder),
+            button(text("复制日志").size(13)).on_press(Message::CopyLog),
+            log_copied_label,
             space::horizontal(),
             text(if app.running { "● 运行中" } else { "○ 空闲" }).size(13),
         ]
         .spacing(10),
-        scrollable(text(app.log.clone()).size(13))
-            .width(Length::Fill)
-            .height(Length::Fill),
+        scrollable(
+            text_editor(&app.log_content)
+                .on_action(Message::LogEditorAction)
+                .size(13),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill),
     ]
     .spacing(6)
     .width(Length::Fill)

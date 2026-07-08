@@ -266,6 +266,10 @@ pub enum Message {
     Start,
     LogEvent(LogEvent),
     CopyPreview,
+    /// 复制日志区文本（优先复制选中部分，无选中则复制全部）
+    CopyLog,
+    /// 日志区只读文本编辑器的用户操作（仅响游标/选中，忽略编辑以保持只读）
+    LogEditorAction(text_editor::Action),
     OpenOutputFolder,
     ClearLog,
     /// 全局键盘事件（用于 ESC 退出等）
@@ -354,12 +358,16 @@ pub struct App {
     pub theme_mode: ThemeMode,
     pub tab: Tab,
     pub log: String,
+    /// 日志区可选择的只读文本编辑器内容（与 `log` 同步）
+    pub log_content: text_editor::Content,
     pub running: bool,
     pub run_gen: u64,
     pub exe_error: String,
     pub input_error: String,
     /// 复制命令后显示“已复制”提示的起始时刻；None 表示当前不显示
     pub copied_at: Option<Instant>,
+    /// 复制日志后显示“已复制”提示的起始时刻；None 表示当前不显示
+    pub log_copied_at: Option<Instant>,
 }
 
 impl App {
@@ -436,11 +444,13 @@ impl App {
             theme_mode: settings.theme_mode,
             tab: Tab::Basic,
             log: String::new(),
+            log_content: text_editor::Content::with_text(""),
             running: false,
             run_gen: 0,
             exe_error: String::new(),
             input_error: String::new(),
             copied_at: None,
+            log_copied_at: None,
         };
         // 若用户未指定 exe，尝试自动探测
         if app.exe_path.is_empty() {
@@ -757,24 +767,26 @@ impl App {
                             self.tab = Tab::Log;
                             self.log.clear();
                             self.log.push_str("开始运行...\n");
+                            self.log_content = text_editor::Content::with_text(&self.log);
                         }
                     }
                 }
             }
-            Message::LogEvent(ev) => match ev {
-                LogEvent::Line(s) => {
-                    self.log.push_str(&s);
-                    self.log.push('\n');
-                }
-                LogEvent::Done(Ok(code)) => {
-                    self.running = false;
-                    self.log.push_str(&format!("进程结束，退出码 {code}\n"));
-                }
-                LogEvent::Done(Err(e)) => {
-                    self.running = false;
-                    self.log.push_str(&format!("进程异常：{e}\n"));
-                }
-            },
+            Message::LogEvent(ev) => {
+                let append = match ev {
+                    LogEvent::Line(s) => format!("{s}\n"),
+                    LogEvent::Done(Ok(code)) => {
+                        self.running = false;
+                        format!("进程结束，退出码 {code}\n")
+                    }
+                    LogEvent::Done(Err(e)) => {
+                        self.running = false;
+                        format!("进程异常：{e}\n")
+                    }
+                };
+                self.log.push_str(&append);
+                self.log_content = text_editor::Content::with_text(&self.log);
+            }
             Message::CopyPreview => {
                 let text = self.command_preview();
                 std::thread::spawn(move || {
@@ -784,10 +796,34 @@ impl App {
                 });
                 self.copied_at = Some(Instant::now());
             }
+            Message::CopyLog => {
+                // 优先复制选中文本；未选中任何内容时复制全部日志
+                let to_copy = match self.log_content.selection() {
+                    Some(s) if !s.trim().is_empty() => s,
+                    _ => self.log.clone(),
+                };
+                std::thread::spawn(move || {
+                    if let Ok(mut cb) = arboard::Clipboard::new() {
+                        let _ = cb.set_text(to_copy);
+                    }
+                });
+                self.log_copied_at = Some(Instant::now());
+            }
+            Message::LogEditorAction(action) => {
+                // 日志区为只读：忽略文本编辑动作，仅保留游标/选中状态
+                if !matches!(action, text_editor::Action::Edit(_)) {
+                    self.log_content.perform(action);
+                }
+            }
             Message::Tick => {
                 if let Some(at) = self.copied_at {
                     if at.elapsed() >= Duration::from_millis(500) {
                         self.copied_at = None;
+                    }
+                }
+                if let Some(at) = self.log_copied_at {
+                    if at.elapsed() >= Duration::from_millis(500) {
+                        self.log_copied_at = None;
                     }
                 }
             }
@@ -798,14 +834,31 @@ impl App {
                         .spawn();
                 }
             }
-            Message::ClearLog => self.log.clear(),
+            Message::ClearLog => {
+                self.log.clear();
+                self.log_content = text_editor::Content::with_text("");
+            }
             Message::KeyEvent(event) => {
-                if let keyboard::Event::KeyPressed {
-                    key: keyboard::Key::Named(keyboard::key::Named::Escape),
-                    ..
-                } = event
-                {
-                    return iced::exit();
+                if let keyboard::Event::KeyPressed { key, modifiers, .. } = event {
+                    // ESC 退出
+                    if let keyboard::Key::Named(keyboard::key::Named::Escape) = key {
+                        return iced::exit();
+                    }
+                    // 日志区内 Ctrl+C：text_editor 原生已复制选中文本，这里补一个“已复制”提示
+                    // 注意：Ctrl 按下时不同平台可能把按键报为 "c" 或控制字符 ETX(\u{3})
+                    if modifiers.contains(keyboard::Modifiers::CTRL)
+                        && !modifiers.contains(keyboard::Modifiers::ALT)
+                        && matches!(key, keyboard::Key::Character(c) if {
+                            let s = c.as_ref();
+                            s.eq_ignore_ascii_case("c") || s == "\u{3}"
+                        })
+                    {
+                        if let Some(sel) = self.log_content.selection() {
+                            if !sel.trim().is_empty() {
+                                self.log_copied_at = Some(Instant::now());
+                            }
+                        }
+                    }
                 }
             }
         }

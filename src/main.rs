@@ -16,9 +16,14 @@ fn main() -> iced::Result {
         .subscription(|app: &App| {
             iced::Subscription::batch([
                 runner::make_subscription(app.run_gen, app.running),
-                iced::keyboard::listen().map(app::Message::KeyEvent),
-                // 复制命令后，用定时订阅在约 1.5s 后自动清除“已复制”提示
-                if app.copied_at.is_some() {
+                // 用 listen_with 监听“所有”键盘事件（含被控件捕获的，如 text_editor 的 Ctrl+C），
+                // 这样日志区内 Ctrl+C 原生复制时也能补一个“已复制”提示。
+                iced::event::listen_with(|event, _status, _window| match event {
+                    iced::Event::Keyboard(ke) => Some(app::Message::KeyEvent(ke.clone())),
+                    _ => None,
+                }),
+                // 复制命令/日志后，用定时订阅在约 500ms 后自动清除“已复制”提示
+                if app.copied_at.is_some() || app.log_copied_at.is_some() {
                     iced::time::every(std::time::Duration::from_millis(100))
                         .map(|_| app::Message::Tick)
                 } else {
