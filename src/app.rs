@@ -172,7 +172,10 @@ impl std::fmt::Display for ThemeMode {
 
 #[derive(Debug, Clone)]
 pub enum LogEvent {
+    /// 一行新日志（以 \n 结尾的普通输出），追加到日志末尾
     Line(String),
+    /// 进度刷新（通常以 \r 结尾），覆盖上一行而非新增
+    Progress(String),
     Done(Result<u32, String>),
 }
 
@@ -358,6 +361,8 @@ pub struct App {
     pub theme_mode: ThemeMode,
     pub tab: Tab,
     pub log: String,
+    /// 上一次追加的是进度刷新行（\r），用于下次覆盖而非新增
+    pub log_last_is_progress: bool,
     /// 日志区可选择的只读文本编辑器内容（与 `log` 同步）
     pub log_content: text_editor::Content,
     pub running: bool,
@@ -444,6 +449,7 @@ impl App {
             theme_mode: settings.theme_mode,
             tab: Tab::Basic,
             log: String::new(),
+            log_last_is_progress: false,
             log_content: text_editor::Content::with_text(""),
             running: false,
             run_gen: 0,
@@ -767,6 +773,7 @@ impl App {
                             self.running = true;
                             self.tab = Tab::Log;
                             self.log.clear();
+                            self.log_last_is_progress = false;
                             self.log.push_str("开始运行...\n");
                             self.log_content = text_editor::Content::with_text(&self.log);
                         }
@@ -775,12 +782,33 @@ impl App {
             }
             Message::LogEvent(ev) => {
                 let append = match ev {
-                    LogEvent::Line(s) => format!("{s}\n"),
+                    LogEvent::Line(s) => {
+                        self.log_last_is_progress = false;
+                        format!("{s}\n")
+                    }
+                    LogEvent::Progress(s) => {
+                        // 进度刷新（\r）覆盖上一行，避免日志被刷屏
+                        if self.log_last_is_progress {
+                            // 删除最后一行（保留之前的换行）
+                            if let Some(pos) = self.log.rfind('\n') {
+                                let prefix = &self.log[..pos];
+                                if let Some(prev) = prefix.rfind('\n') {
+                                    self.log.truncate(prev + 1);
+                                } else {
+                                    self.log.clear();
+                                }
+                            }
+                        }
+                        self.log_last_is_progress = true;
+                        format!("{s}\n")
+                    }
                     LogEvent::Done(Ok(code)) => {
+                        self.log_last_is_progress = false;
                         self.running = false;
                         format!("进程结束，退出码 {code}\n")
                     }
                     LogEvent::Done(Err(e)) => {
+                        self.log_last_is_progress = false;
                         self.running = false;
                         format!("进程异常：{e}\n")
                     }
@@ -837,6 +865,7 @@ impl App {
             }
             Message::ClearLog => {
                 self.log.clear();
+                self.log_last_is_progress = false;
                 self.log_content = text_editor::Content::with_text("");
             }
             Message::KeyEvent(event) => {

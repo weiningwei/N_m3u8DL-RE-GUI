@@ -72,18 +72,50 @@ fn spawn_reader<R: std::io::Read + Send + 'static>(
     tx: mpsc::Sender<LogEvent>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
-        let mut data = String::new();
-        // 读到 EOF（进程结束、管道关闭）。用 read_to_string 而非 lines()，
-        // 避免进程退出时最后一行没有换行符而被丢弃。
-        if reader.read_to_string(&mut data).is_ok() {
-            for raw in data.split('\n') {
-                let line = raw.strip_suffix('\r').unwrap_or(raw);
-                if !line.is_empty() {
-                    let _ = tx.send(LogEvent::Line(strip_ansi(line)));
+        let mut buf: Vec<u8> = Vec::with_capacity(256);
+        let mut byte = [0u8; 1];
+        loop {
+            match reader.read(&mut byte) {
+                Ok(0) => {
+                    // EOF：把残留的半行也发出去
+                    send_chunk(&mut buf, &tx, false);
+                    break;
                 }
+                Ok(_) => {
+                    let b = byte[0];
+                    if b == b'\n' {
+                        // 普通换行：作为新的一行
+                        send_chunk(&mut buf, &tx, false);
+                    } else if b == b'\r' {
+                        // 回车：进度刷新，覆盖上一行
+                        send_chunk(&mut buf, &tx, true);
+                    } else {
+                        buf.push(b);
+                    }
+                }
+                Err(_) => break,
             }
         }
     })
+}
+
+/// 把缓冲的字节作为一行发送；progress=true 表示用 Progress 变体（覆盖上一行）。
+fn send_chunk(buf: &mut Vec<u8>, tx: &mpsc::Sender<LogEvent>, progress: bool) {
+    if buf.is_empty() {
+        return;
+    }
+    let raw = String::from_utf8_lossy(buf).to_string();
+    buf.clear();
+    let line = strip_ansi(&raw);
+    let line = line.trim_end_matches(['\r', '\n']).to_string();
+    if line.is_empty() {
+        return;
+    }
+    let _ = tx.send(if progress {
+        LogEvent::Progress(line)
+    } else {
+        LogEvent::Line(line)
+    });
 }
 
 /// 移除 ANSI 转义序列（捕获模式下 RE 可能输出彩色控制符）
