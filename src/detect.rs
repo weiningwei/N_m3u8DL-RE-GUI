@@ -79,17 +79,7 @@ pub fn locate_ffmpeg(preferred: &str) -> Option<String> {
         }
     }
 
-    // 1. PATH
-    if let Ok(path_var) = std::env::var("PATH") {
-        for p in std::env::split_paths(&path_var) {
-            let candidate = p.join(name);
-            if candidate.is_file() {
-                return Some(candidate.to_string_lossy().into_owned());
-            }
-        }
-    }
-
-    // 2. RE 同目录
+    // 1. RE（N_m3u8DL-RE.exe）同级目录：本地随附的 ffmpeg 优先
     if let Some(exe) = locate_exe("") {
         if let Some(dir) = std::path::Path::new(&exe).parent() {
             let candidate = dir.join(name);
@@ -99,10 +89,20 @@ pub fn locate_ffmpeg(preferred: &str) -> Option<String> {
         }
     }
 
-    // 3. GUI 同目录
+    // 2. GUI 同级目录
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Some(candidate.to_string_lossy().into_owned());
+            }
+        }
+    }
+
+    // 3. 环境变量 PATH
+    if let Ok(path_var) = std::env::var("PATH") {
+        for p in std::env::split_paths(&path_var) {
+            let candidate = p.join(name);
             if candidate.is_file() {
                 return Some(candidate.to_string_lossy().into_owned());
             }

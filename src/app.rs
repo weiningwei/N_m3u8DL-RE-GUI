@@ -437,6 +437,12 @@ impl App {
                 app.exe_path = found;
             }
         }
+        // 若未配置 ffmpeg，自动探测并直接显示在文本框
+        if app.ffmpeg_path.trim().is_empty() {
+            if let Some(f) = locate_ffmpeg("") {
+                app.ffmpeg_path = f;
+            }
+        }
         (app, iced::Task::none())
     }
 
