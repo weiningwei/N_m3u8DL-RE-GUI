@@ -162,12 +162,12 @@ pub fn build_args(app: &App) -> Vec<String> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::app::{App, ProxyMode, SubFormat, Tab};
     use iced::widget::text_editor;
 
-    fn sample_app() -> App {
+    pub(crate) fn sample_app() -> App {
         // 仅设置少量字段，验证参数拼装
         let mut a = App {
             exe_path: String::new(),
@@ -233,6 +233,7 @@ mod tests {
             force_ansi_console: false,
             use_ffmpeg_concat_demuxer: false,
             external_console: false,
+            theme_mode: crate::app::ThemeMode::System,
             tab: Tab::Basic,
             log: String::new(),
             running: false,

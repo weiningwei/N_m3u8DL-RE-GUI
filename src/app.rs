@@ -740,3 +740,28 @@ impl App {
         ui::view(self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::args::tests::sample_app;
+
+    #[test]
+    fn theme_maps_light_and_dark_explicitly() {
+        let mut a = sample_app();
+        a.theme_mode = ThemeMode::Light;
+        assert!(matches!(a.theme(), iced::Theme::Light));
+        a.theme_mode = ThemeMode::Dark;
+        assert!(matches!(a.theme(), iced::Theme::Dark));
+    }
+
+    #[test]
+    fn theme_system_resolves_to_a_valid_theme() {
+        let mut a = sample_app();
+        a.theme_mode = ThemeMode::System;
+        match a.theme() {
+            iced::Theme::Light | iced::Theme::Dark => {}
+            other => panic!("unexpected theme from system mode: {:?}", other),
+        }
+    }
+}
