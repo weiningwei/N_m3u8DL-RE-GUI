@@ -845,6 +845,18 @@ impl App {
                     if let keyboard::Key::Named(keyboard::key::Named::Escape) = key {
                         return iced::exit();
                     }
+                    // Tab / Shift+Tab 在可聚焦控件（输入框、按钮等）间移动焦点
+                    if let keyboard::Key::Named(keyboard::key::Named::Tab) = key {
+                        if !modifiers.contains(keyboard::Modifiers::CTRL)
+                            && !modifiers.contains(keyboard::Modifiers::ALT)
+                        {
+                            return if modifiers.contains(keyboard::Modifiers::SHIFT) {
+                                operation::focus_previous()
+                            } else {
+                                operation::focus_next()
+                            };
+                        }
+                    }
                     // 日志区内 Ctrl+C：text_editor 原生已复制选中文本，这里补一个“已复制”提示
                     // 注意：Ctrl 按下时不同平台可能把按键报为 "c" 或控制字符 ETX(\u{3})
                     if modifiers.contains(keyboard::Modifiers::CTRL)
