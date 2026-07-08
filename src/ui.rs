@@ -102,6 +102,20 @@ fn path_field<'a>(
     col.into()
 }
 
+/// 显示某可执行文件的探测状态：找到为绿色，未找到为红色。
+fn detection_status<'a>(found: Option<String>, name: &'a str) -> Element<'a, Message> {
+    match found {
+        Some(path) => text(format!("✓ 已探测到 {name}：{path}"))
+            .color([0.3, 0.78, 0.36])
+            .size(12)
+            .into(),
+        None => text(format!("✗ 未找到 {name}，请在对应框手动指定/安装"))
+            .color([0.9, 0.3, 0.3])
+            .size(12)
+            .into(),
+    }
+}
+
 fn tab_bar(app: &App) -> Element<'_, Message> {
     let tabs = [
         (Tab::Basic, "基本"),
@@ -190,6 +204,7 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         },
         (!app.exe_error.is_empty()).then_some(&*app.exe_error),
     ));
+    col = col.push(detection_status(locate_exe(&app.exe_path), "N_m3u8DL-RE.exe"));
     let save_is_default = app.save_dir == default_save_dir();
     col = col.push(path_field(
         "保存目录",
@@ -319,10 +334,11 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         None,
     ));
     col = col.push(
-        text("合并/混流必需；未安装请到 https://ffmpeg.org/download.html 下载，放到 PATH 或 N_m3u8DL-RE 同目录")
+        text("合并/混流必需；自动探测同级目录/PATH，未安装请到 https://ffmpeg.org/download.html 下载，放到 PATH 或 N_m3u8DL-RE 同目录")
             .size(11)
             .color([0.6, 0.6, 0.6]),
     );
+    col = col.push(detection_status(locate_ffmpeg(&app.ffmpeg_path), "ffmpeg"));
     col = col.push(lab(
         "解密引擎",
         pick_list(
