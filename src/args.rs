@@ -239,6 +239,7 @@ pub(crate) mod tests {
             running: false,
             run_gen: 0,
             exe_error: String::new(),
+            input_error: String::new(),
         };
         a.save_name = "test".into();
         a.proxy_mode = ProxyMode::Custom;

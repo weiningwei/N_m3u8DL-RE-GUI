@@ -65,6 +65,8 @@ fn lab<'a>(label: &'a str, control: impl Into<Element<'a, Message>>) -> Element<
 /// `default_hint`：当该字段正处于“默认值”状态时传入（如自动探测到的路径、
 /// 或 exe 同级默认目录）。此时不把默认值作为已输入文本高亮显示，而是以占位
 /// 提示的形式弱化处理，避免与用户显式输入混淆。
+///
+/// `error`：该字段的业务校验错误（如“请输入下载地址”），直接显示在框下方。
 fn path_field<'a>(
     label: &'a str,
     value: &'a str,
@@ -72,6 +74,7 @@ fn path_field<'a>(
     on_input: impl Fn(String) -> Message + 'a,
     browse: Option<Message>,
     default_hint: Option<&'static str>,
+    error: Option<&'a str>,
 ) -> Element<'a, Message> {
     let (shown_value, shown_placeholder) = match default_hint {
         Some(hint) => ("", hint),
@@ -90,6 +93,11 @@ fn path_field<'a>(
     let mut col = column![lab(label, control)].spacing(2);
     if let Err(e) = validate_path_format(value) {
         col = col.push(text(e).color([0.9, 0.3, 0.3]).size(12));
+    }
+    if let Some(err) = error {
+        if !err.is_empty() {
+            col = col.push(text(err).color([0.9, 0.3, 0.3]).size(13));
+        }
     }
     col.into()
 }
@@ -180,10 +188,8 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         } else {
             None
         },
+        (!app.exe_error.is_empty()).then_some(&*app.exe_error),
     ));
-    if !app.exe_error.is_empty() {
-        col = col.push(text(&app.exe_error).color([0.9, 0.3, 0.3]).size(13));
-    }
     let save_is_default = app.save_dir == default_save_dir();
     col = col.push(path_field(
         "保存目录",
@@ -196,6 +202,7 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         } else {
             None
         },
+        None,
     ));
     let tmp_is_default = app.tmp_dir == default_temp_path();
     col = col.push(path_field(
@@ -209,6 +216,7 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         } else {
             None
         },
+        None,
     ));
     let log_is_default = app.log_file_path == default_log_path();
     col = col.push(path_field(
@@ -222,11 +230,15 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         } else {
             None
         },
+        None,
     ));
     col = col.push(lab(
         "下载地址/文件",
         text_input("URL 或本地 m3u8/mpd 路径", &app.input).on_input(Message::InputChanged),
     ));
+    if !app.input_error.is_empty() {
+        col = col.push(text(&app.input_error).color([0.9, 0.3, 0.3]).size(13));
+    }
     col = col.push(lab(
         "保存文件名",
         text_input("不含后缀，留空自动", &app.save_name).on_input(Message::SaveNameChanged),
@@ -304,6 +316,7 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         } else {
             None
         },
+        None,
     ));
     col = col.push(
         text("合并/混流必需；未安装请到 https://ffmpeg.org/download.html 下载，放到 PATH 或 N_m3u8DL-RE 同目录")
@@ -324,6 +337,7 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         &app.decryption_binary,
         "mp4decrypt/shaka 路径",
         Message::DecryptionBinaryChanged,
+        None,
         None,
         None,
     ));
@@ -386,6 +400,7 @@ fn decrypt_tab(app: &App) -> Element<'_, Message> {
         &app.key_text_file,
         "密钥文件路径",
         Message::KeyTextFileChanged,
+        None,
         None,
         None,
     ));

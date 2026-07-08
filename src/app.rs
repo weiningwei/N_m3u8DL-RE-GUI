@@ -351,6 +351,7 @@ pub struct App {
     pub running: bool,
     pub run_gen: u64,
     pub exe_error: String,
+    pub input_error: String,
 }
 
 impl App {
@@ -430,6 +431,7 @@ impl App {
             running: false,
             run_gen: 0,
             exe_error: String::new(),
+            input_error: String::new(),
         };
         // 若用户未指定 exe，尝试自动探测
         if app.exe_path.is_empty() {
@@ -707,6 +709,7 @@ impl App {
                     return Task::none();
                 }
                 self.exe_error.clear();
+                self.input_error.clear();
                 // 路径格式预检：非空但含非法字符的路径直接拦下，避免把坏路径传给 RE。
                 if let Some(msg) = invalid_path_message(self) {
                     self.exe_error = msg;
@@ -719,7 +722,7 @@ impl App {
                     }
                     Some(exe) => {
                         if self.input.trim().is_empty() {
-                            self.exe_error = "请输入下载地址或文件路径。".to_string();
+                            self.input_error = "请输入下载地址或文件路径。".to_string();
                         } else {
                             // ffmpeg 预检：RE 合并/混流必需。自动定位后用之；
                             // 若仍找不到，给出清晰指引而非让 RE 崩溃退出。
