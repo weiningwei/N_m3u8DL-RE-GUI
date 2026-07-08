@@ -3,7 +3,7 @@ use crate::config::Settings;
 use crate::detect::{default_log_path, default_save_dir, default_temp_path, locate_exe, locate_ffmpeg};
 use crate::runner;
 use crate::ui;
-use iced::widget::text_editor;
+use iced::widget::{operation, text_editor, Id};
 use iced::{Element, Task};
 use iced::keyboard;
 use serde::{Deserialize, Serialize};
@@ -464,7 +464,8 @@ impl App {
                 app.ffmpeg_path = f;
             }
         }
-        (app, iced::Task::none())
+        // 启动后将焦点置于 URL 输入框，方便直接粘贴/输入地址后回车下载
+        (app, operation::focus(Id::new("url-input")))
     }
 
     /// 实时命令预览（不含 exe 本身）

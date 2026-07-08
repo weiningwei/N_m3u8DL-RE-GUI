@@ -8,7 +8,7 @@ use crate::detect::{
 };
 use iced::widget::{
     button, checkbox, column, pick_list, row, rule, scrollable, space, text, text_editor,
-    text_input,
+    text_input, Id,
 };
 use iced::{Element, Length};
 
@@ -256,6 +256,7 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
     col = col.push(lab(
         "下载地址/文件",
         text_input("URL 或本地 m3u8/mpd 路径", &app.input)
+            .id(Id::new("url-input"))
             .on_input(Message::InputChanged)
             .on_submit(Message::Start),
     ));
@@ -264,7 +265,9 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
     }
     col = col.push(lab(
         "保存文件名",
-        text_input("不含后缀，留空自动", &app.save_name).on_input(Message::SaveNameChanged),
+        text_input("不含后缀，留空自动", &app.save_name)
+            .on_input(Message::SaveNameChanged)
+            .on_submit(Message::Start),
     ));
     col = col.push(lab(
         "命名模板",
