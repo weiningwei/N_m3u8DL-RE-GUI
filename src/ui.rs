@@ -7,8 +7,8 @@ use crate::detect::{
     validate_path_format,
 };
 use iced::widget::{
-    button, checkbox, column, pick_list, row, rule, scrollable, space, text, text_editor,
-    text_input, Id,
+    button, checkbox, container, column, pick_list, row, rule, scrollable, space, text,
+    text_editor, text_input, Id,
 };
 use iced::{Element, Length};
 
@@ -171,7 +171,8 @@ fn bottom_bar(app: &App) -> Element<'_, Message> {
 }
 
 pub fn view(app: &App) -> Element<'_, Message> {
-    let content = match app.tab {
+    let is_log = matches!(app.tab, Tab::Log);
+    let content: Element<'_, Message> = match app.tab {
         Tab::Basic => basic_tab(app),
         Tab::Streams => streams_tab(app),
         Tab::Decrypt => decrypt_tab(app),
@@ -179,13 +180,21 @@ pub fn view(app: &App) -> Element<'_, Message> {
         Tab::Advanced => advanced_tab(app),
         Tab::Log => log_tab(app),
     };
-    column![
-        tab_bar(app),
-        rule::horizontal(1.0),
+    // 日志区自带可滚动编辑器，不再额外套一层 scrollable：
+    // 否则 Fill 高度嵌套在 scrollable 的无界内容里会塌缩成很小。
+    let content: Element<'_, Message> = if is_log {
+        container(content).height(Length::Fill).into()
+    } else {
         scrollable(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .spacing(4.0),
+            .spacing(4.0)
+            .into()
+    };
+    column![
+        tab_bar(app),
+        rule::horizontal(1.0),
+        content,
         bottom_bar(app),
     ]
     .spacing(6)
