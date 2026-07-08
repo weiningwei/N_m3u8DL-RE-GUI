@@ -499,6 +499,27 @@ pub fn quote(s: &str) -> String {
     }
 }
 
+/// 检查各路径字段的格式合法性，返回首个非法路径的错误提示（无则 None）。
+/// 空串视为合法（可选路径），只校验用户实际填入的内容。
+fn invalid_path_message(app: &App) -> Option<String> {
+    use crate::detect::validate_path_format;
+    let fields = [
+        ("可执行文件", &app.exe_path),
+        ("保存目录", &app.save_dir),
+        ("临时目录", &app.tmp_dir),
+        ("日志文件", &app.log_file_path),
+        ("ffmpeg", &app.ffmpeg_path),
+        ("解密工具", &app.decryption_binary),
+        ("密钥文件", &app.key_text_file),
+    ];
+    for (name, p) in fields {
+        if let Err(e) = validate_path_format(p) {
+            return Some(format!("{name}路径格式无效：{e}"));
+        }
+    }
+    None
+}
+
 /// 判断系统是否处于深色模式（仅 Windows 有效，其他平台返回 false 即浅色）。
 #[cfg(target_os = "windows")]
 fn system_is_dark() -> bool {
@@ -686,6 +707,11 @@ impl App {
                     return Task::none();
                 }
                 self.exe_error.clear();
+                // 路径格式预检：非空但含非法字符的路径直接拦下，避免把坏路径传给 RE。
+                if let Some(msg) = invalid_path_message(self) {
+                    self.exe_error = msg;
+                    return Task::none();
+                }
                 match locate_exe(&self.exe_path) {
                     None => {
                         self.exe_error =

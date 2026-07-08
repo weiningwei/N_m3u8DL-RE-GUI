@@ -2,6 +2,7 @@ use crate::app::{
     App, CustomHlsMethod, DecryptionEngine, LogLevel, Message, ProxyMode, SubFormat, Tab,
     ThemeMode, UiLanguage,
 };
+use crate::detect::validate_path_format;
 use iced::widget::{
     button, checkbox, column, pick_list, row, rule, scrollable, space, text, text_editor,
     text_input,
@@ -53,6 +54,32 @@ fn lab<'a>(label: &'a str, control: impl Into<Element<'a, Message>>) -> Element<
         // 使右边框落在裁剪区域内部，完整显示。
         .padding(iced::Padding::new(0.0).right(2.0))
         .into()
+}
+
+/// 路径输入框：在标签 + 输入框（可选“浏览”按钮）下方，对非空且格式非法的
+/// 路径显示一行红色提示。空路径不报错（可选路径留空由调用方判断必填）。
+fn path_field<'a>(
+    label: &'a str,
+    value: &'a str,
+    placeholder: &'a str,
+    on_input: impl Fn(String) -> Message + 'a,
+    browse: Option<Message>,
+) -> Element<'a, Message> {
+    let input = text_input(placeholder, value)
+        .on_input(on_input)
+        .width(Length::Fill);
+    let control: Element<'a, Message> = match browse {
+        Some(msg) => row![input, button(text("浏览")).on_press(msg)]
+            .spacing(6)
+            .width(Length::Fill)
+            .into(),
+        None => input.into(),
+    };
+    let mut col = column![lab(label, control)].spacing(2);
+    if let Err(e) = validate_path_format(value) {
+        col = col.push(text(e).color([0.9, 0.3, 0.3]).size(12));
+    }
+    col.into()
 }
 
 fn tab_bar(app: &App) -> Element<'_, Message> {
@@ -129,52 +156,36 @@ pub fn view(app: &App) -> Element<'_, Message> {
 
 fn basic_tab(app: &App) -> Element<'_, Message> {
     let mut col = column![].spacing(8).width(Length::Fill);
-    col = col.push(lab(
+    col = col.push(path_field(
         "可执行文件",
-        row![
-            text_input("N_m3u8DL-RE.exe 路径", &app.exe_path)
-                .on_input(Message::ExePathChanged)
-                .width(Length::Fill),
-            button(text("浏览")).on_press(Message::BrowseExe),
-        ]
-        .spacing(6)
-        .width(Length::Fill),
+        &app.exe_path,
+        "N_m3u8DL-RE.exe 路径",
+        Message::ExePathChanged,
+        Some(Message::BrowseExe),
     ));
     if !app.exe_error.is_empty() {
         col = col.push(text(&app.exe_error).color([0.9, 0.3, 0.3]).size(13));
     }
-    col = col.push(lab(
+    col = col.push(path_field(
         "保存目录",
-        row![
-            text_input("默认 exe 同目录 downloads", &app.save_dir)
-                .on_input(Message::SaveDirChanged)
-                .width(Length::Fill),
-            button(text("浏览")).on_press(Message::BrowseSaveDir),
-        ]
-        .spacing(6)
-        .width(Length::Fill),
+        &app.save_dir,
+        "默认 exe 同目录 downloads",
+        Message::SaveDirChanged,
+        Some(Message::BrowseSaveDir),
     ));
-    col = col.push(lab(
+    col = col.push(path_field(
         "临时目录",
-        row![
-            text_input("默认位于 exe 同目录 temp", &app.tmp_dir)
-                .on_input(Message::TmpDirChanged)
-                .width(Length::Fill),
-            button(text("浏览")).on_press(Message::BrowseTmpDir),
-        ]
-        .spacing(6)
-        .width(Length::Fill),
+        &app.tmp_dir,
+        "默认位于 exe 同目录 temp",
+        Message::TmpDirChanged,
+        Some(Message::BrowseTmpDir),
     ));
-    col = col.push(lab(
+    col = col.push(path_field(
         "日志文件路径",
-        row![
-            text_input("如 C:\\Logs\\log.txt", &app.log_file_path)
-                .on_input(Message::LogFilePathChanged)
-                .width(Length::Fill),
-            button(text("浏览")).on_press(Message::BrowseLogFile),
-        ]
-        .spacing(6)
-        .width(Length::Fill),
+        &app.log_file_path,
+        "如 C:\\Logs\\log.txt",
+        Message::LogFilePathChanged,
+        Some(Message::BrowseLogFile),
     ));
     col = col.push(lab(
         "下载地址/文件",
@@ -245,9 +256,12 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         "主题",
         pick_list(&THEME_MODES[..], Some(&app.theme_mode), Message::ThemeModeSelected).width(160),
     ));
-    col = col.push(lab(
+    col = col.push(path_field(
         "ffmpeg 路径",
-        text_input("留空自动寻找(PATH/同目录)", &app.ffmpeg_path).on_input(Message::FfmpegPathChanged),
+        &app.ffmpeg_path,
+        "留空自动寻找(PATH/同目录)",
+        Message::FfmpegPathChanged,
+        None,
     ));
     col = col.push(
         text("合并/混流必需；未安装请到 https://ffmpeg.org/download.html 下载，放到 PATH 或 N_m3u8DL-RE 同目录")
@@ -263,10 +277,12 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         )
         .width(200),
     ));
-    col = col.push(lab(
+    col = col.push(path_field(
         "解密工具路径",
-        text_input("mp4decrypt/shaka 路径", &app.decryption_binary)
-            .on_input(Message::DecryptionBinaryChanged),
+        &app.decryption_binary,
+        "mp4decrypt/shaka 路径",
+        Message::DecryptionBinaryChanged,
+        None,
     ));
     col.into()
 }
@@ -322,9 +338,12 @@ fn decrypt_tab(app: &App) -> Element<'_, Message> {
         "解密密钥 --key",
         text_input("KID:KEY 或 KEY", &app.key).on_input(Message::KeyChanged),
     ));
-    col = col.push(lab(
+    col = col.push(path_field(
         "密钥文件 --key-text-file",
-        text_input("密钥文件路径", &app.key_text_file).on_input(Message::KeyTextFileChanged),
+        &app.key_text_file,
+        "密钥文件路径",
+        Message::KeyTextFileChanged,
+        None,
     ));
     col = col.push(lab(
         "HLS 加密方式",

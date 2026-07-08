@@ -119,6 +119,34 @@ pub fn locate_ffmpeg(preferred: &str) -> Option<String> {
     find_ffmpeg_in_dirs(preferred, &dirs)
 }
 
+/// 校验文件路径字符串的“格式”合法性（非存在性检查）。
+/// - 空串视为合法：可选路径留空由调用方判断必填。
+/// - 拒绝包含控制字符，或 Windows 非法文件名字符（< > " | ? *）。
+///   注意：不拒绝 `:`（盘符如 `C:\` 需要）与路径分隔符 `\` `/`。
+pub fn validate_path_format(path: &str) -> Result<(), String> {
+    if path.is_empty() {
+        return Ok(());
+    }
+    if path.contains(|c: char| c.is_control()) {
+        return Err("包含非法控制字符".to_string());
+    }
+    #[cfg(windows)]
+    {
+        for c in ['<', '>', '"', '|', '?', '*'] {
+            if path.contains(c) {
+                return Err(format!("包含 Windows 非法字符 '{c}'"));
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if path.contains('\0') {
+            return Err("包含非法空字符".to_string());
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,5 +206,26 @@ mod tests {
         for d in &dirs {
             rm(d);
         }
+    }
+
+    #[test]
+    fn path_format_accepts_valid() {
+        // 空串（可选路径留空）合法
+        assert!(validate_path_format("").is_ok());
+        // 含盘符与分隔符的合法 Windows 路径
+        assert!(validate_path_format("D:\\Downloads\\视频").is_ok());
+        assert!(validate_path_format("C:/a/b/c.mp4").is_ok());
+        assert!(validate_path_format("/usr/local/bin/ffmpeg").is_ok());
+    }
+
+    #[test]
+    fn path_format_rejects_invalid() {
+        assert!(validate_path_format("a/b?c").is_err()); // ?
+        assert!(validate_path_format("a*b").is_err()); // *
+        assert!(validate_path_format("a<b").is_err()); // <
+        assert!(validate_path_format("a>b").is_err()); // >
+        assert!(validate_path_format("a|b").is_err()); // |
+        assert!(validate_path_format("a\"b").is_err()); // "
+        assert!(validate_path_format("a\x01b").is_err()); // 控制字符
     }
 }
