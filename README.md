@@ -171,7 +171,6 @@ src/
 
 ## 相关项目
 
-- **N_m3u8DL-RE**：本 GUI 所封装的跨平台流媒体下载器（命令行工具）。其完整的命令行参数与含义见 [`doc/README.md`](doc/README.md#命令行参数)。
-- **N_m3u8DL-CLI / N_m3u8DL-CLI-SimpleG**：仓库内另两个历史 .NET 项目（旧 CLI 及其 WPF 简单 GUI）。
+- **[N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE)**：本 GUI 所封装的跨平台流媒体下载器（命令行工具），完整的命令行参数与含义见其[官方仓库](https://github.com/nilaoda/N_m3u8DL-RE)。
 
 > 本 GUI 为社区第三方实现，与 `N_m3u8DL-RE` 官方无隶属关系。
