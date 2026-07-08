@@ -247,8 +247,13 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
     ));
     col = col.push(lab(
         "ffmpeg 路径",
-        text_input("留空自动寻找", &app.ffmpeg_path).on_input(Message::FfmpegPathChanged),
+        text_input("留空自动寻找(PATH/同目录)", &app.ffmpeg_path).on_input(Message::FfmpegPathChanged),
     ));
+    col = col.push(
+        text("合并/混流必需；未安装请到 https://ffmpeg.org/download.html 下载，放到 PATH 或 N_m3u8DL-RE 同目录")
+            .size(11)
+            .color([0.6, 0.6, 0.6]),
+    );
     col = col.push(lab(
         "解密引擎",
         pick_list(

@@ -67,3 +67,47 @@ pub fn locate_exe(preferred: &str) -> Option<String> {
 
     None
 }
+
+/// 定位 ffmpeg：优先用用户指定路径，否则在 PATH、RE 同目录、GUI 同目录查找。
+/// ffmpeg 是 RE 合并/混流的必需依赖，缺失会导致下载直接失败。
+pub fn locate_ffmpeg(preferred: &str) -> Option<String> {
+    let name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
+
+    if !preferred.trim().is_empty() {
+        if std::path::Path::new(preferred).is_file() {
+            return Some(preferred.to_string());
+        }
+    }
+
+    // 1. PATH
+    if let Ok(path_var) = std::env::var("PATH") {
+        for p in std::env::split_paths(&path_var) {
+            let candidate = p.join(name);
+            if candidate.is_file() {
+                return Some(candidate.to_string_lossy().into_owned());
+            }
+        }
+    }
+
+    // 2. RE 同目录
+    if let Some(exe) = locate_exe("") {
+        if let Some(dir) = std::path::Path::new(&exe).parent() {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Some(candidate.to_string_lossy().into_owned());
+            }
+        }
+    }
+
+    // 3. GUI 同目录
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Some(candidate.to_string_lossy().into_owned());
+            }
+        }
+    }
+
+    None
+}

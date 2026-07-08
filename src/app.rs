@@ -1,6 +1,6 @@
 use crate::args::build_args;
 use crate::config::Settings;
-use crate::detect::{default_log_path, default_save_dir, default_temp_path, locate_exe};
+use crate::detect::{default_log_path, default_save_dir, default_temp_path, locate_exe, locate_ffmpeg};
 use crate::runner;
 use crate::ui;
 use iced::widget::text_editor;
@@ -378,7 +378,7 @@ impl App {
             max_speed: String::new(),
             concurrent_download: false,
             ui_language: UiLanguage::Default,
-            ffmpeg_path: String::new(),
+            ffmpeg_path: settings.ffmpeg_path.clone(),
             decryption_engine: DecryptionEngine::Default,
             decryption_binary: String::new(),
             auto_select: false,
@@ -478,6 +478,7 @@ impl App {
             headers: self.headers.text().to_string(),
             external_console: self.external_console,
             theme_mode: self.theme_mode,
+            ffmpeg_path: self.ffmpeg_path.clone(),
         };
         s.save();
     }
@@ -688,6 +689,17 @@ impl App {
                         if self.input.trim().is_empty() {
                             self.exe_error = "请输入下载地址或文件路径。".to_string();
                         } else {
+                            // ffmpeg 预检：RE 合并/混流必需。自动定位后用之；
+                            // 若仍找不到，给出清晰指引而非让 RE 崩溃退出。
+                            if self.ffmpeg_path.trim().is_empty() {
+                                if let Some(f) = locate_ffmpeg("") {
+                                    self.ffmpeg_path = f;
+                                }
+                            }
+                            if self.ffmpeg_path.trim().is_empty() {
+                                self.exe_error = "未找到 ffmpeg（RE 合并/混流必需）。请安装 ffmpeg 并在“高级”页指定其路径，或将其放到 PATH / N_m3u8DL-RE 同目录。下载地址：https://ffmpeg.org/download.html".to_string();
+                                return Task::none();
+                            }
                             self.run_gen += 1;
                             let run_id = self.run_gen;
                             let input = self.input.trim().to_string();

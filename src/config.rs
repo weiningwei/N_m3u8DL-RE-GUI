@@ -14,6 +14,8 @@ pub struct Settings {
     pub external_console: bool,
     #[serde(default)]
     pub theme_mode: ThemeMode,
+    #[serde(default)]
+    pub ffmpeg_path: String,
 }
 
 impl Settings {
@@ -58,6 +60,7 @@ mod tests {
             headers: "X-Test: 1".into(),
             external_console: true,
             theme_mode: ThemeMode::Dark,
+            ffmpeg_path: String::new(),
         }
     }
 
