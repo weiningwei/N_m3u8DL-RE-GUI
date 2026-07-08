@@ -13,7 +13,12 @@ fn main() -> iced::Result {
     let font = load_cjk_font();
     let mut app = iced::application(App::new, App::update, App::view)
         .title(|_app: &App| "N_m3u8DL-RE GUI".to_string())
-        .subscription(|app: &App| runner::make_subscription(app.run_gen, app.running))
+        .subscription(|app: &App| {
+            iced::Subscription::batch([
+                runner::make_subscription(app.run_gen, app.running),
+                iced::keyboard::listen().map(app::Message::KeyEvent),
+            ])
+        })
         .theme(|app: &App| app.theme())
         .default_font(font)
         .window(iced::window::Settings {

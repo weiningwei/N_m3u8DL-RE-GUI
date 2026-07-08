@@ -5,6 +5,7 @@ use crate::runner;
 use crate::ui;
 use iced::widget::text_editor;
 use iced::{Element, Task};
+use iced::keyboard;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -266,6 +267,8 @@ pub enum Message {
     CopyPreview,
     OpenOutputFolder,
     ClearLog,
+    /// 全局键盘事件（用于 ESC 退出等）
+    KeyEvent(keyboard::Event),
 }
 
 pub struct App {
@@ -782,6 +785,15 @@ impl App {
                 }
             }
             Message::ClearLog => self.log.clear(),
+            Message::KeyEvent(event) => {
+                if let keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Named(keyboard::key::Named::Escape),
+                    ..
+                } = event
+                {
+                    return iced::exit();
+                }
+            }
         }
         Task::none()
     }
