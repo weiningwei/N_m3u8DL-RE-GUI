@@ -68,46 +68,115 @@ pub fn locate_exe(preferred: &str) -> Option<String> {
     None
 }
 
-/// 定位 ffmpeg：优先用用户指定路径，否则在 PATH、RE 同目录、GUI 同目录查找。
-/// ffmpeg 是 RE 合并/混流的必需依赖，缺失会导致下载直接失败。
-pub fn locate_ffmpeg(preferred: &str) -> Option<String> {
-    let name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
+/// ffmpeg 可执行文件名（按平台）。
+pub(crate) fn ffmpeg_file_name() -> &'static str {
+    if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" }
+}
 
-    if !preferred.trim().is_empty() {
-        if std::path::Path::new(preferred).is_file() {
-            return Some(preferred.to_string());
+/// 在目录列表中按给定顺序查找 ffmpeg，返回第一个命中的完整路径。
+/// 抽取为纯函数以便对检测顺序做单元测试（不依赖全局 PATH / exe 状态）。
+fn find_ffmpeg_in_dirs(preferred: &str, dirs: &[std::path::PathBuf]) -> Option<String> {
+    let name = ffmpeg_file_name();
+    if !preferred.trim().is_empty() && std::path::Path::new(preferred).is_file() {
+        return Some(preferred.to_string());
+    }
+    for d in dirs {
+        let candidate = d.join(name);
+        if candidate.is_file() {
+            return Some(candidate.to_string_lossy().into_owned());
         }
     }
+    None
+}
+
+/// 定位 ffmpeg：优先用用户指定路径，否则按 RE 同级目录 → GUI 同级目录 →
+/// 环境变量 PATH 的顺序查找。本地随附的 ffmpeg 优先于全局 PATH。
+/// ffmpeg 是 RE 合并/混流的必需依赖，缺失会导致下载直接失败。
+pub fn locate_ffmpeg(preferred: &str) -> Option<String> {
+    let mut dirs: Vec<std::path::PathBuf> = Vec::new();
 
     // 1. RE（N_m3u8DL-RE.exe）同级目录：本地随附的 ffmpeg 优先
     if let Some(exe) = locate_exe("") {
         if let Some(dir) = std::path::Path::new(&exe).parent() {
-            let candidate = dir.join(name);
-            if candidate.is_file() {
-                return Some(candidate.to_string_lossy().into_owned());
-            }
+            dirs.push(dir.to_path_buf());
         }
     }
 
     // 2. GUI 同级目录
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            let candidate = dir.join(name);
-            if candidate.is_file() {
-                return Some(candidate.to_string_lossy().into_owned());
-            }
+            dirs.push(dir.to_path_buf());
         }
     }
 
     // 3. 环境变量 PATH
     if let Ok(path_var) = std::env::var("PATH") {
         for p in std::env::split_paths(&path_var) {
-            let candidate = p.join(name);
-            if candidate.is_file() {
-                return Some(candidate.to_string_lossy().into_owned());
-            }
+            dirs.push(p.to_path_buf());
         }
     }
 
-    None
+    find_ffmpeg_in_dirs(preferred, &dirs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn mk_temp(tag: u32) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("nm3u8_ff_{}_{}", std::process::id(), tag));
+        let _ = fs::create_dir_all(&d);
+        d
+    }
+
+    fn rm(d: &std::path::PathBuf) {
+        let _ = fs::remove_dir_all(d);
+    }
+
+    /// 验证不同目录下的检测顺序：RE 目录 > GUI 目录 > PATH 目录。
+    #[test]
+    fn detection_order_across_dirs() {
+        let re = mk_temp(1);
+        let gui = mk_temp(2);
+        let path = mk_temp(3);
+        let name = ffmpeg_file_name();
+
+        // 仅 PATH 目录有 ffmpeg → 选中 PATH
+        fs::write(path.join(name), b"").unwrap();
+        let dirs = vec![re.clone(), gui.clone(), path.clone()];
+        assert_eq!(find_ffmpeg_in_dirs("", &dirs), Some(path.join(name).to_string_lossy().into_owned()));
+
+        // GUI 目录也放入 → 选中更靠前的 GUI
+        fs::write(gui.join(name), b"").unwrap();
+        assert_eq!(find_ffmpeg_in_dirs("", &dirs), Some(gui.join(name).to_string_lossy().into_owned()));
+
+        // RE 目录也放入 → 选中最靠前的 RE
+        fs::write(re.join(name), b"").unwrap();
+        assert_eq!(find_ffmpeg_in_dirs("", &dirs), Some(re.join(name).to_string_lossy().into_owned()));
+
+        // 用户指定路径优先于所有目录
+        let pref = mk_temp(4);
+        fs::write(pref.join(name), b"").unwrap();
+        assert_eq!(
+            find_ffmpeg_in_dirs(pref.join(name).to_str().unwrap(), &dirs),
+            Some(pref.join(name).to_string_lossy().into_owned())
+        );
+        rm(&pref);
+
+        // 全部不存在 → None
+        rm(&re);
+        rm(&gui);
+        rm(&path);
+        assert_eq!(find_ffmpeg_in_dirs("", &dirs), None);
+    }
+
+    #[test]
+    fn no_ffmpeg_returns_none() {
+        let dirs = vec![mk_temp(5), mk_temp(6)];
+        assert!(find_ffmpeg_in_dirs("", &dirs).is_none());
+        for d in &dirs {
+            rm(d);
+        }
+    }
 }
