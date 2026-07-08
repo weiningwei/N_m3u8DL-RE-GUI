@@ -17,6 +17,13 @@ fn main() -> iced::Result {
             iced::Subscription::batch([
                 runner::make_subscription(app.run_gen, app.running),
                 iced::keyboard::listen().map(app::Message::KeyEvent),
+                // 复制命令后，用定时订阅在约 1.5s 后自动清除“已复制”提示
+                if app.copied_at.is_some() {
+                    iced::time::every(std::time::Duration::from_millis(100))
+                        .map(|_| app::Message::Tick)
+                } else {
+                    iced::Subscription::none()
+                },
             ])
         })
         .theme(|app: &App| app.theme())

@@ -143,6 +143,11 @@ fn bottom_bar(app: &App) -> Element<'_, Message> {
     } else {
         button(text("开始下载").size(16)).on_press(Message::Start)
     };
+    let copied_label: iced::Element<'_, Message> = if app.copied_at.is_some() {
+        text("已复制 ✓").size(13).color([0.18, 0.8, 0.44]).into()
+    } else {
+        text("").size(13).into()
+    };
     column![
         text("命令预览：").size(12),
         scrollable(text(app.command_preview()).size(12))
@@ -150,6 +155,7 @@ fn bottom_bar(app: &App) -> Element<'_, Message> {
             .height(50.0),
         row![
             button(text("复制命令").size(13)).on_press(Message::CopyPreview),
+            copied_label,
             checkbox(app.external_console)
                 .label("使用外部控制台窗口（不捕获日志，类似 SimpleG）")
                 .on_toggle(Message::ExternalConsoleToggled),

@@ -8,6 +8,7 @@ use iced::{Element, Task};
 use iced::keyboard;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum Tab {
@@ -269,6 +270,8 @@ pub enum Message {
     ClearLog,
     /// 全局键盘事件（用于 ESC 退出等）
     KeyEvent(keyboard::Event),
+    /// 复制命令后的“已复制”提示自动消失计时
+    Tick,
 }
 
 pub struct App {
@@ -355,6 +358,8 @@ pub struct App {
     pub run_gen: u64,
     pub exe_error: String,
     pub input_error: String,
+    /// 复制命令后显示“已复制”提示的起始时刻；None 表示当前不显示
+    pub copied_at: Option<Instant>,
 }
 
 impl App {
@@ -435,6 +440,7 @@ impl App {
             run_gen: 0,
             exe_error: String::new(),
             input_error: String::new(),
+            copied_at: None,
         };
         // 若用户未指定 exe，尝试自动探测
         if app.exe_path.is_empty() {
@@ -776,6 +782,14 @@ impl App {
                         let _ = cb.set_text(text);
                     }
                 });
+                self.copied_at = Some(Instant::now());
+            }
+            Message::Tick => {
+                if let Some(at) = self.copied_at {
+                    if at.elapsed() >= Duration::from_millis(500) {
+                        self.copied_at = None;
+                    }
+                }
             }
             Message::OpenOutputFolder => {
                 if !self.save_dir.is_empty() {
