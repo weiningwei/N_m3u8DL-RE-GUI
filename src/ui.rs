@@ -1,6 +1,6 @@
 use crate::app::{
     App, CustomHlsMethod, DecryptionEngine, LogLevel, Message, ProxyMode, SubFormat, Tab,
-    UiLanguage,
+    ThemeMode, UiLanguage,
 };
 use iced::widget::{
     button, checkbox, column, pick_list, row, rule, scrollable, space, text, text_editor,
@@ -22,6 +22,7 @@ const DEC_ENGINES: [DecryptionEngine; 4] = [
     DecryptionEngine::ShakaPackager,
 ];
 const SUB_FORMATS: [SubFormat; 2] = [SubFormat::Srt, SubFormat::Vtt];
+const THEME_MODES: [ThemeMode; 3] = [ThemeMode::System, ThemeMode::Light, ThemeMode::Dark];
 const HLS_METHODS: [CustomHlsMethod; 9] = [
     CustomHlsMethod::Default,
     CustomHlsMethod::None,
@@ -239,6 +240,10 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
     col = col.push(lab(
         "界面语言",
         pick_list(&UI_LANGS[..], Some(&app.ui_language), Message::UiLanguageSelected).width(160),
+    ));
+    col = col.push(lab(
+        "主题",
+        pick_list(&THEME_MODES[..], Some(&app.theme_mode), Message::ThemeModeSelected).width(160),
     ));
     col = col.push(lab(
         "ffmpeg 路径",

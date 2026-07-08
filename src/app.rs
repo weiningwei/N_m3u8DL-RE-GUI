@@ -5,6 +5,7 @@ use crate::runner;
 use crate::ui;
 use iced::widget::text_editor;
 use iced::{Element, Task};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -148,6 +149,25 @@ impl std::fmt::Display for LogLevel {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+pub enum ThemeMode {
+    /// 跟随系统（Windows 读取“应用使用浅色/深色”设置）
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl std::fmt::Display for ThemeMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            ThemeMode::System => "跟随系统",
+            ThemeMode::Light => "浅色",
+            ThemeMode::Dark => "深色",
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum LogEvent {
     Line(String),
@@ -239,6 +259,7 @@ pub enum Message {
     UseFfmpegConcatDemuxerToggled(bool),
     // 运行/界面
     ExternalConsoleToggled(bool),
+    ThemeModeSelected(ThemeMode),
     TabSelected(Tab),
     Start,
     LogEvent(LogEvent),
@@ -324,6 +345,7 @@ pub struct App {
     pub use_ffmpeg_concat_demuxer: bool,
     // 运行/界面
     pub external_console: bool,
+    pub theme_mode: ThemeMode,
     pub tab: Tab,
     pub log: String,
     pub running: bool,
@@ -402,6 +424,7 @@ impl App {
             force_ansi_console: false,
             use_ffmpeg_concat_demuxer: false,
             external_console: settings.external_console,
+            theme_mode: settings.theme_mode,
             tab: Tab::Basic,
             log: String::new(),
             running: false,
@@ -429,6 +452,21 @@ impl App {
         s.trim().to_string()
     }
 
+    /// 根据当前主题模式返回 iced 主题
+    pub fn theme(&self) -> iced::Theme {
+        match self.theme_mode {
+            ThemeMode::Light => iced::Theme::Light,
+            ThemeMode::Dark => iced::Theme::Dark,
+            ThemeMode::System => {
+                if system_is_dark() {
+                    iced::Theme::Dark
+                } else {
+                    iced::Theme::Light
+                }
+            }
+        }
+    }
+
     pub fn save_settings(&self) {
         let s = Settings {
             exe_path: self.exe_path.clone(),
@@ -436,6 +474,7 @@ impl App {
             proxy_address: self.proxy_address.clone(),
             headers: self.headers.text().to_string(),
             external_console: self.external_console,
+            theme_mode: self.theme_mode,
         };
         s.save();
     }
@@ -448,6 +487,37 @@ pub fn quote(s: &str) -> String {
     } else {
         s.to_string()
     }
+}
+
+/// 判断系统是否处于深色模式（仅 Windows 有效，其他平台返回 false 即浅色）。
+#[cfg(target_os = "windows")]
+fn system_is_dark() -> bool {
+    use std::process::Command;
+    let out = Command::new("reg")
+        .args([
+            "query",
+            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            "/v",
+            "AppsUseLightTheme",
+        ])
+        .output();
+    if let Ok(o) = out {
+        let s = String::from_utf8_lossy(&o.stdout);
+        for line in s.lines() {
+            if line.contains("AppsUseLightTheme") {
+                // 典型输出如：AppsUseLightTheme    REG_DWORD    0x0
+                if let Some(v) = line.split_whitespace().last() {
+                    return v.eq_ignore_ascii_case("0x0");
+                }
+            }
+        }
+    }
+    false
+}
+
+#[cfg(not(target_os = "windows"))]
+fn system_is_dark() -> bool {
+    false
 }
 
 impl App {
@@ -594,6 +664,10 @@ impl App {
             Message::UseFfmpegConcatDemuxerToggled(b) => self.use_ffmpeg_concat_demuxer = b,
             Message::ExternalConsoleToggled(b) => {
                 self.external_console = b;
+                self.save_settings();
+            }
+            Message::ThemeModeSelected(m) => {
+                self.theme_mode = m;
                 self.save_settings();
             }
             Message::TabSelected(t) => self.tab = t,

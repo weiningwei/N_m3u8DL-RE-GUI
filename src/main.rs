@@ -14,6 +14,7 @@ fn main() -> iced::Result {
     let mut app = iced::application(App::new, App::update, App::view)
         .title(|_app: &App| "N_m3u8DL-RE GUI".to_string())
         .subscription(|app: &App| runner::make_subscription(app.run_gen, app.running))
+        .theme(|app: &App| app.theme())
         .default_font(font)
         .window(iced::window::Settings {
             size: iced::Size::new(1100.0, 760.0),

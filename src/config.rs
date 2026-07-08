@@ -1,3 +1,4 @@
+use crate::app::ThemeMode;
 use crate::detect::exe_dir;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -11,6 +12,8 @@ pub struct Settings {
     pub proxy_address: String,
     pub headers: String,
     pub external_console: bool,
+    #[serde(default)]
+    pub theme_mode: ThemeMode,
 }
 
 impl Settings {
