@@ -2,7 +2,10 @@ use crate::app::{
     App, CustomHlsMethod, DecryptionEngine, LogLevel, Message, ProxyMode, SubFormat, Tab,
     ThemeMode, UiLanguage,
 };
-use crate::detect::validate_path_format;
+use crate::detect::{
+    default_log_path, default_save_dir, default_temp_path, locate_exe, locate_ffmpeg,
+    validate_path_format,
+};
 use iced::widget::{
     button, checkbox, column, pick_list, row, rule, scrollable, space, text, text_editor,
     text_input,
@@ -58,14 +61,23 @@ fn lab<'a>(label: &'a str, control: impl Into<Element<'a, Message>>) -> Element<
 
 /// 路径输入框：在标签 + 输入框（可选“浏览”按钮）下方，对非空且格式非法的
 /// 路径显示一行红色提示。空路径不报错（可选路径留空由调用方判断必填）。
+///
+/// `default_hint`：当该字段正处于“默认值”状态时传入（如自动探测到的路径、
+/// 或 exe 同级默认目录）。此时不把默认值作为已输入文本高亮显示，而是以占位
+/// 提示的形式弱化处理，避免与用户显式输入混淆。
 fn path_field<'a>(
     label: &'a str,
     value: &'a str,
     placeholder: &'a str,
     on_input: impl Fn(String) -> Message + 'a,
     browse: Option<Message>,
+    default_hint: Option<&'static str>,
 ) -> Element<'a, Message> {
-    let input = text_input(placeholder, value)
+    let (shown_value, shown_placeholder) = match default_hint {
+        Some(hint) => ("", hint),
+        None => (value, placeholder),
+    };
+    let input = text_input(shown_placeholder, shown_value)
         .on_input(on_input)
         .width(Length::Fill);
     let control: Element<'a, Message> = match browse {
@@ -156,36 +168,60 @@ pub fn view(app: &App) -> Element<'_, Message> {
 
 fn basic_tab(app: &App) -> Element<'_, Message> {
     let mut col = column![].spacing(8).width(Length::Fill);
+    let exe_is_default = matches!(locate_exe(""), Some(p) if p == app.exe_path);
     col = col.push(path_field(
         "可执行文件",
         &app.exe_path,
         "N_m3u8DL-RE.exe 路径",
         Message::ExePathChanged,
         Some(Message::BrowseExe),
+        if exe_is_default {
+            Some("默认自动探测 N_m3u8DL-RE.exe（可手动指定）")
+        } else {
+            None
+        },
     ));
     if !app.exe_error.is_empty() {
         col = col.push(text(&app.exe_error).color([0.9, 0.3, 0.3]).size(13));
     }
+    let save_is_default = app.save_dir == default_save_dir();
     col = col.push(path_field(
         "保存目录",
         &app.save_dir,
         "默认 exe 同目录 downloads",
         Message::SaveDirChanged,
         Some(Message::BrowseSaveDir),
+        if save_is_default {
+            Some("默认：可执行文件同目录 downloads")
+        } else {
+            None
+        },
     ));
+    let tmp_is_default = app.tmp_dir == default_temp_path();
     col = col.push(path_field(
         "临时目录",
         &app.tmp_dir,
         "默认位于 exe 同目录 temp",
         Message::TmpDirChanged,
         Some(Message::BrowseTmpDir),
+        if tmp_is_default {
+            Some("默认：可执行文件同目录 temp")
+        } else {
+            None
+        },
     ));
+    let log_is_default = app.log_file_path == default_log_path();
     col = col.push(path_field(
         "日志文件路径",
         &app.log_file_path,
         "如 C:\\Logs\\log.txt",
         Message::LogFilePathChanged,
         Some(Message::BrowseLogFile),
+        if log_is_default {
+            Some("默认：可执行文件同目录 log/n_m3u8dl-re-gui.log")
+        } else {
+            None
+        },
     ));
     col = col.push(lab(
         "下载地址/文件",
@@ -256,12 +292,18 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         "主题",
         pick_list(&THEME_MODES[..], Some(&app.theme_mode), Message::ThemeModeSelected).width(160),
     ));
+    let ff_is_default = matches!(locate_ffmpeg(""), Some(p) if p == app.ffmpeg_path);
     col = col.push(path_field(
         "ffmpeg 路径",
         &app.ffmpeg_path,
         "留空自动寻找(PATH/同目录)",
         Message::FfmpegPathChanged,
         None,
+        if ff_is_default {
+            Some("默认自动探测（PATH / 同目录）")
+        } else {
+            None
+        },
     ));
     col = col.push(
         text("合并/混流必需；未安装请到 https://ffmpeg.org/download.html 下载，放到 PATH 或 N_m3u8DL-RE 同目录")
@@ -282,6 +324,7 @@ fn basic_tab(app: &App) -> Element<'_, Message> {
         &app.decryption_binary,
         "mp4decrypt/shaka 路径",
         Message::DecryptionBinaryChanged,
+        None,
         None,
     ));
     col.into()
@@ -343,6 +386,7 @@ fn decrypt_tab(app: &App) -> Element<'_, Message> {
         &app.key_text_file,
         "密钥文件路径",
         Message::KeyTextFileChanged,
+        None,
         None,
     ));
     col = col.push(lab(
