@@ -579,14 +579,21 @@ fn invalid_path_message(app: &App) -> Option<String> {
 #[cfg(target_os = "windows")]
 fn system_is_dark() -> bool {
     use std::process::Command;
-    let out = Command::new("reg")
-        .args([
-            "query",
-            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-            "/v",
-            "AppsUseLightTheme",
-        ])
-        .output();
+    let mut cmd = Command::new("reg");
+    cmd.args([
+        "query",
+        r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+        "/v",
+        "AppsUseLightTheme",
+    ]);
+    // reg.exe 是控制台程序，隐藏其窗口避免启动时闪一下黑窗
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let out = cmd.output();
     if let Ok(o) = out {
         let s = String::from_utf8_lossy(&o.stdout);
         for line in s.lines() {

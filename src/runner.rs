@@ -23,6 +23,14 @@ pub fn start_run(run_id: u64, exe: String, input: String, args: Vec<String>, cap
             cmd.stdin(Stdio::null())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
+            // 捕获模式下隐藏子进程的控制台窗口（N_m3u8DL-RE.exe / ffmpeg.exe
+            // 均为控制台程序，否则会闪现一个黑色终端窗口）
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
         } else {
             // SimpleG 式：继承标准流并开独立控制台窗口
             cmd.stdin(Stdio::inherit())
